@@ -1,0 +1,109 @@
+
+CC          = gcc
+CXX         = g++
+CFLAGS      += -g -O2 -Wno-deprecated -Wall -std=c++11 -pthread
+
+#-------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
+LOCAL_SRC   += $(sort $(wildcard *.cpp *.c))
+
+LOCAL_OBJ   += $(patsubst %.cpp,%.o, $(patsubst %.c,%.o, $(LOCAL_SRC)))
+
+DEP_FILE    := $(foreach obj, $(LOCAL_OBJ), $(dir $(obj)).$(basename $(notdir $(obj))).d)
+
+#-------------------------------------------------------------------------------
+
+LIB             +=  -lpthread ${LIB_DIR}
+
+#-----------------------------------------------------------------------------
+
+TARGET                  := $(strip $(TARGET))
+IS_LIB                  := F
+
+
+ifeq ($(SUFFIX),.a)
+    IS_LIB              := T
+endif
+
+ifeq ($(SUFFIX),.so)
+    IS_LIB              := T
+endif
+
+#-------------------------------------------------------------------------------
+
+all : $(LOCAL_OBJ) $(TARGET) FORSTRIP
+
+#-------------------------------------------------------------------------------
+ifeq ($(IS_LIB),T)
+
+$(filter %.a,$(TARGET)) : $(LOCAL_OBJ) $(REMOTE_OBJ)
+	ar r $@ $(LOCAL_OBJ)
+
+$(filter %.so,$(TARGET)) : $(LOCAL_OBJ) $(REMOTE_OBJ)
+	$(CC) $(LFLAGS) -shared -o $@ $(LOCAL_OBJ) $(LIB)
+
+$(filter-out %.so %.a,$(TARGET)) : $(LOCAL_OBJ) $(REMOTE_OBJ)
+	$(CXX) $(CFLAGS) -o $@ $^ $(INCLUDE) $(LIB)
+    
+FORSTRIP:$(TARGET)
+ifeq ($(STRIP_FLAG),Y)
+	@strip $(TARGET)
+endif
+
+else
+
+$(filter %.a,$(TARGET)) : $(LOCAL_OBJ) $(REMOTE_OBJ)
+	ar r $@ $(LOCAL_OBJ)
+
+$(filter %.so,$(TARGET)) : $(LOCAL_OBJ) $(REMOTE_OBJ)
+	$(CC) $(LFLAGS) -shared -o $@ $(LOCAL_OBJ) $(LIB)
+
+$(filter-out %.so %.a,$(TARGET)) : $(LOCAL_OBJ) $(REMOTE_OBJ)
+	$(CXX) $(CFLAGS) -o $@ $^ $(INCLUDE) $(LIB)
+
+FORSTRIP:$(TARGET)
+ifeq ($(STRIP_FLAG),Y)
+	@strip $(TARGET)
+endif
+
+endif
+
+
+
+#----------------------------------------------------------------------------------
+
+clean:
+	rm -vf $(LOCAL_OBJ) $(XFAST_H) $(TARGET)  ${CLEANFILE} .*.d.tmp gmon.out
+
+cleanall:
+	rm -vf $(LOCAL_OBJ) $(XFAST_H) $(TARGET) $(DEP_FILE) ${CLEANFILE} *.o .*.d.tmp .*.d gmon.out *.tgz
+
+ifneq ($(DEP_FILE),)
+-include $(DEP_FILE)
+endif
+
+
+
+
+#----------------------------------------------------------------------------------
+
+.%.d: %.cpp
+	@echo "update $@ ..."; \
+	echo -n $< | sed s/\.cpp/\.o:/ > $@; \
+	$(CC) $(INCLUDE) -MM $< | sed '1s/.*.://' >> $@;
+
+%.o: %.cpp
+	$(CXX) $(CFLAGS) $(INCLUDE) -o $@ -c $<
+
+.%.d: %.c
+	@echo "update $@ ..."; \
+	echo -n $< | sed s/\.c/\.o:/ > $@; \
+	$(CC) $(INCLUDE) -MM $< | sed '1s/.*.://' >> $@;
+
+%.o: %.c
+	$(CC) $(CFLAGS) $(INCLUDE) -o $@ -c $<
+
+#----------------------------------------------------------------------------------
+
